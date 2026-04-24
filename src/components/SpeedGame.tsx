@@ -275,7 +275,7 @@ export default function SpeedGame() {
         video.srcObject = stream;
         await video.play();
 
-        const Pose = window.Pose;
+        const Pose = await waitForGlobal("Pose");
         const pose = new Pose({
           locateFile: (file: string) => MP_BASE + file,
         });
