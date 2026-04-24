@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
 // ============================================================
-// MediaPipe Hands loader (CDN). Loaded lazily so SSR is safe.
+// MediaPipe POSE loader (CDN). Pose tracks the whole upper body
+// (shoulders, elbows, wrists) — these landmarks remain locked
+// even during fast hand motion because the arm chain is large
+// and high-contrast vs the background. Much more reliable than
+// finger-level Hand tracking for high-speed rep counting.
 // ============================================================
-const MP_HANDS_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js";
-const MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/hands/";
+const MP_POSE_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js";
+const MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/pose/";
 
 declare global {
   interface Window {
-    Hands: any;
+    Pose: any;
   }
 }
 
@@ -29,14 +33,25 @@ function loadScript(src: string): Promise<void> {
 // ============================================================
 type Phase = "idle" | "countdown" | "playing" | "finished";
 
-const GAME_DURATION = 20; // seconds
-const REP_COOLDOWN_MS = 70;     // ~allows up to ~14 reps/sec — pure jitter guard
-const MIN_MOVE_THRESHOLD = 0.012; // tiny movement still counts (was 0.025)
-const DEAD_ZONE = 0.004;          // hands considered "level" only when nearly identical (was 0.015)
-const SMOOTHING = 0.85;           // very responsive (was 0.55)
-const HAND_LOST_MS = 200;         // drop hand quickly when not seen
+const GAME_DURATION = 20;
+const REP_COOLDOWN_MS = 70;
+const MIN_MOVE_THRESHOLD = 0.012;
+const DEAD_ZONE = 0.004;
+const SMOOTHING = 0.8;
+const ARM_LOST_MS = 250;
+const VISIBILITY_THRESHOLD = 0.3; // pose landmark visibility cutoff
 
-interface HandPoint {
+// MediaPipe Pose landmark indices
+const LM = {
+  LEFT_SHOULDER: 11,
+  RIGHT_SHOULDER: 12,
+  LEFT_ELBOW: 13,
+  RIGHT_ELBOW: 14,
+  LEFT_WRIST: 15,
+  RIGHT_WRIST: 16,
+};
+
+interface ArmPoint {
   x: number;
   y: number;
   visible: boolean;
@@ -46,21 +61,19 @@ interface HandPoint {
 export default function SpeedGame() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const handsRef = useRef<any>(null);
+  const poseRef = useRef<any>(null);
   const rafRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Tracked hands by spatial side (left side of frame / right side of frame).
-  // We assign by x-position rather than MediaPipe's "Left/Right" handedness
-  // because handedness can flip during fast motion. Spatial side is stable.
-  const leftHand = useRef<HandPoint>({ x: 0.3, y: 0.5, visible: false, lastSeen: 0 });
-  const rightHand = useRef<HandPoint>({ x: 0.7, y: 0.5, visible: false, lastSeen: 0 });
+  // NOTE: MediaPipe Pose returns landmarks from the SUBJECT's perspective.
+  // Subject's left wrist appears on the RIGHT side of an unmirrored frame.
+  // We use the labels as-is (subject perspective). Display mirroring is
+  // handled in the draw step.
+  const leftArm = useRef<ArmPoint>({ x: 0.3, y: 0.5, visible: false, lastSeen: 0 });
+  const rightArm = useRef<ArmPoint>({ x: 0.7, y: 0.5, visible: false, lastSeen: 0 });
 
-  // Rep detection state
   const lastRepTime = useRef<number>(0);
-  // Sign of (leftY - rightY). When it flips, hands have crossed vertically.
   const lastSign = useRef<number>(0);
-  // Track recent extremes to enforce minimum movement amplitude
   const leftExtreme = useRef<{ min: number; max: number }>({ min: 1, max: 0 });
   const rightExtreme = useRef<{ min: number; max: number }>({ min: 1, max: 0 });
 
@@ -69,7 +82,7 @@ export default function SpeedGame() {
   const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
   const [countdown, setCountdown] = useState(3);
   const [status, setStatus] = useState("Loading camera…");
-  const [bothHandsVisible, setBothHandsVisible] = useState(false);
+  const [bothArmsVisible, setBothArmsVisible] = useState(false);
   const [popKey, setPopKey] = useState(0);
   const [highScore, setHighScore] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
@@ -77,21 +90,19 @@ export default function SpeedGame() {
   const phaseRef = useRef<Phase>("idle");
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
-  // Load high score
   useEffect(() => {
     const hs = Number(localStorage.getItem("speedgame_hs") || "0");
     setHighScore(hs);
   }, []);
 
   // ============================================================
-  // Rep detection — positional crossing logic
+  // Rep detection — vertical crossing of the two forearm points
   // ============================================================
   const detectRep = useCallback(() => {
-    const L = leftHand.current;
-    const R = rightHand.current;
+    const L = leftArm.current;
+    const R = rightArm.current;
     if (!L.visible || !R.visible) return;
 
-    // Update extremes for amplitude check
     leftExtreme.current.min = Math.min(leftExtreme.current.min, L.y);
     leftExtreme.current.max = Math.max(leftExtreme.current.max, L.y);
     rightExtreme.current.min = Math.min(rightExtreme.current.min, R.y);
@@ -99,8 +110,7 @@ export default function SpeedGame() {
 
     const diff = L.y - R.y;
     const sign = diff > DEAD_ZONE ? 1 : diff < -DEAD_ZONE ? -1 : 0;
-
-    if (sign === 0) return; // dead zone — hands roughly level
+    if (sign === 0) return;
 
     if (lastSign.current === 0) {
       lastSign.current = sign;
@@ -108,7 +118,6 @@ export default function SpeedGame() {
     }
 
     if (sign !== lastSign.current) {
-      // Crossing detected
       const now = performance.now();
       const sinceLast = now - lastRepTime.current;
       const leftAmp = leftExtreme.current.max - leftExtreme.current.min;
@@ -119,7 +128,6 @@ export default function SpeedGame() {
           setReps((r) => r + 1);
           setPopKey((k) => k + 1);
           lastRepTime.current = now;
-          // Reset amplitude window after counting
           leftExtreme.current = { min: L.y, max: L.y };
           rightExtreme.current = { min: R.y, max: R.y };
         }
@@ -129,107 +137,71 @@ export default function SpeedGame() {
   }, []);
 
   // ============================================================
-  // MediaPipe results handler
+  // Pose results handler
+  //
+  // We compute the FOREARM MIDPOINT (between elbow and wrist).
+  // This is a large, stable region BELOW the hand — much easier
+  // for the model to track during fast motion than the hand itself.
   // ============================================================
   const onResults = useCallback((results: any) => {
     const now = performance.now();
-    const landmarks = results.multiHandLandmarks || [];
+    const lm = results.poseLandmarks;
 
-    // Use wrist (landmark 0) — stable, near forearm, less affected by finger blur
-    const points = landmarks.map((lm: any[]) => {
-      // Average wrist + middle MCP for a slightly more stable "palm" point
-      const wrist = lm[0];
-      const mcp = lm[9];
-      return {
-        x: (wrist.x + mcp.x) / 2,
-        y: (wrist.y + mcp.y) / 2,
-      };
-    });
-
-    // Assignment: ALWAYS bind detected points to the two slots via
-    // nearest-neighbor against last known position. If only one hand is
-    // visible, ONLY that slot updates — the other slot is hidden, so we
-    // never draw a stale dot on top of the visible hand.
-    let leftDetect: { x: number; y: number } | null = null;
-    let rightDetect: { x: number; y: number } | null = null;
-
-    if (points.length >= 2) {
-      // Two hands: assign to minimize total distance from last known slots.
-      const [a, b] = points;
-      const lastL = leftHand.current;
-      const lastR = rightHand.current;
-      // If neither slot has ever been seen, fall back to spatial x order.
-      if (!lastL.visible && !lastR.visible) {
-        const sorted = [a, b].sort((p, q) => p.x - q.x);
-        leftDetect = sorted[0];
-        rightDetect = sorted[1];
-      } else {
-        const costAA_BB =
-          Math.hypot(a.x - lastL.x, a.y - lastL.y) +
-          Math.hypot(b.x - lastR.x, b.y - lastR.y);
-        const costAB_BA =
-          Math.hypot(a.x - lastR.x, a.y - lastR.y) +
-          Math.hypot(b.x - lastL.x, b.y - lastL.y);
-        if (costAA_BB <= costAB_BA) {
-          leftDetect = a; rightDetect = b;
-        } else {
-          leftDetect = b; rightDetect = a;
-        }
+    if (lm) {
+      // Subject's LEFT side
+      const lWrist = lm[LM.LEFT_WRIST];
+      const lElbow = lm[LM.LEFT_ELBOW];
+      if (lWrist && lElbow &&
+          (lWrist.visibility ?? 1) > VISIBILITY_THRESHOLD &&
+          (lElbow.visibility ?? 1) > VISIBILITY_THRESHOLD) {
+        // Forearm midpoint, biased slightly toward wrist (0.65 wrist, 0.35 elbow)
+        const px = lWrist.x * 0.65 + lElbow.x * 0.35;
+        const py = lWrist.y * 0.65 + lElbow.y * 0.35;
+        leftArm.current.x = leftArm.current.visible
+          ? leftArm.current.x * (1 - SMOOTHING) + px * SMOOTHING
+          : px;
+        leftArm.current.y = leftArm.current.visible
+          ? leftArm.current.y * (1 - SMOOTHING) + py * SMOOTHING
+          : py;
+        leftArm.current.visible = true;
+        leftArm.current.lastSeen = now;
+      } else if (now - leftArm.current.lastSeen > ARM_LOST_MS) {
+        leftArm.current.visible = false;
       }
-    } else if (points.length === 1) {
-      const p = points[0];
-      const lastL = leftHand.current;
-      const lastR = rightHand.current;
-      // Pick whichever slot is closer AND was recently visible.
-      const distL = lastL.visible ? Math.hypot(p.x - lastL.x, p.y - lastL.y) : Infinity;
-      const distR = lastR.visible ? Math.hypot(p.x - lastR.x, p.y - lastR.y) : Infinity;
-      if (distL === Infinity && distR === Infinity) {
-        // Cold start with one hand — assign by frame side.
-        if (p.x < 0.5) leftDetect = p; else rightDetect = p;
-      } else if (distL <= distR) {
-        leftDetect = p;
-      } else {
-        rightDetect = p;
+
+      // Subject's RIGHT side
+      const rWrist = lm[LM.RIGHT_WRIST];
+      const rElbow = lm[LM.RIGHT_ELBOW];
+      if (rWrist && rElbow &&
+          (rWrist.visibility ?? 1) > VISIBILITY_THRESHOLD &&
+          (rElbow.visibility ?? 1) > VISIBILITY_THRESHOLD) {
+        const px = rWrist.x * 0.65 + rElbow.x * 0.35;
+        const py = rWrist.y * 0.65 + rElbow.y * 0.35;
+        rightArm.current.x = rightArm.current.visible
+          ? rightArm.current.x * (1 - SMOOTHING) + px * SMOOTHING
+          : px;
+        rightArm.current.y = rightArm.current.visible
+          ? rightArm.current.y * (1 - SMOOTHING) + py * SMOOTHING
+          : py;
+        rightArm.current.visible = true;
+        rightArm.current.lastSeen = now;
+      } else if (now - rightArm.current.lastSeen > ARM_LOST_MS) {
+        rightArm.current.visible = false;
       }
+    } else {
+      if (now - leftArm.current.lastSeen > ARM_LOST_MS) leftArm.current.visible = false;
+      if (now - rightArm.current.lastSeen > ARM_LOST_MS) rightArm.current.visible = false;
     }
 
-    // EWMA smoothing — high alpha for responsiveness
-    if (leftDetect) {
-      leftHand.current.x = leftHand.current.visible
-        ? leftHand.current.x * (1 - SMOOTHING) + leftDetect.x * SMOOTHING
-        : leftDetect.x;
-      leftHand.current.y = leftHand.current.visible
-        ? leftHand.current.y * (1 - SMOOTHING) + leftDetect.y * SMOOTHING
-        : leftDetect.y;
-      leftHand.current.visible = true;
-      leftHand.current.lastSeen = now;
-    } else if (now - leftHand.current.lastSeen > HAND_LOST_MS) {
-      leftHand.current.visible = false;
-    }
-
-    if (rightDetect) {
-      rightHand.current.x = rightHand.current.visible
-        ? rightHand.current.x * (1 - SMOOTHING) + rightDetect.x * SMOOTHING
-        : rightDetect.x;
-      rightHand.current.y = rightHand.current.visible
-        ? rightHand.current.y * (1 - SMOOTHING) + rightDetect.y * SMOOTHING
-        : rightDetect.y;
-      rightHand.current.visible = true;
-      rightHand.current.lastSeen = now;
-    } else if (now - rightHand.current.lastSeen > HAND_LOST_MS) {
-      rightHand.current.visible = false;
-    }
-
-    const both = leftHand.current.visible && rightHand.current.visible;
-    setBothHandsVisible(both);
+    const both = leftArm.current.visible && rightArm.current.visible;
+    setBothArmsVisible(both);
 
     if (phaseRef.current === "playing") detectRep();
-
     drawOverlay();
   }, [detectRep]);
 
   // ============================================================
-  // Draw hand indicators on canvas overlay
+  // Draw forearm trackers on canvas overlay
   // ============================================================
   const drawOverlay = useCallback(() => {
     const canvas = canvasRef.current;
@@ -241,33 +213,33 @@ export default function SpeedGame() {
     if (!ctx) return;
     ctx.clearRect(0, 0, w, h);
 
-    const drawHand = (p: HandPoint, color: string) => {
+    const drawArm = (p: ArmPoint, color: string) => {
       if (!p.visible) return;
-      // Mirror x for display (we mirror the video via CSS scaleX(-1))
+      // Mirror x (video is flipped via CSS scaleX(-1))
       const x = (1 - p.x) * w;
       const y = p.y * h;
-      const grad = ctx.createRadialGradient(x, y, 4, x, y, 50);
+      const grad = ctx.createRadialGradient(x, y, 4, x, y, 70);
       grad.addColorStop(0, color);
       grad.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(x, y, 50, 0, Math.PI * 2);
+      ctx.arc(x, y, 70, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(x, y, 14, 0, Math.PI * 2);
+      ctx.arc(x, y, 18, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "white";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 4;
       ctx.stroke();
     };
 
-    drawHand(leftHand.current, "rgba(255, 60, 80, 0.95)");
-    drawHand(rightHand.current, "rgba(80, 200, 255, 0.95)");
+    drawArm(leftArm.current, "rgba(255, 60, 80, 0.95)");
+    drawArm(rightArm.current, "rgba(80, 200, 255, 0.95)");
   }, []);
 
   // ============================================================
-  // Camera + MediaPipe init
+  // Camera + MediaPipe Pose init
   // ============================================================
   useEffect(() => {
     let cancelled = false;
@@ -275,7 +247,7 @@ export default function SpeedGame() {
 
     async function init() {
       try {
-        await loadScript(MP_HANDS_URL);
+        await loadScript(MP_POSE_URL);
         if (cancelled) return;
 
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -289,29 +261,29 @@ export default function SpeedGame() {
         video.srcObject = stream;
         await video.play();
 
-        const Hands = window.Hands;
-        const hands = new Hands({
+        const Pose = window.Pose;
+        const pose = new Pose({
           locateFile: (file: string) => MP_BASE + file,
         });
-        hands.setOptions({
-          maxNumHands: 2,
-          modelComplexity: 0, // fastest model — prioritize latency
-          minDetectionConfidence: 0.25,
-          minTrackingConfidence: 0.2,
+        pose.setOptions({
+          modelComplexity: 0,           // lightweight, fastest model
+          smoothLandmarks: true,        // built-in smoothing helps fast motion
+          enableSegmentation: false,
+          minDetectionConfidence: 0.3,
+          minTrackingConfidence: 0.3,
         });
-        hands.onResults(onResults);
-        handsRef.current = hands;
+        pose.onResults(onResults);
+        poseRef.current = pose;
 
-        setStatus("Show both hands");
+        setStatus("Show your upper body");
 
-        // Manual rAF loop (faster + more control than @mediapipe/camera_utils)
         const tick = async () => {
           if (cancelled) return;
           if (!processing && video.readyState >= 2) {
             processing = true;
             try {
-              await hands.send({ image: video });
-            } catch (_) { /* ignore intermittent send errors */ }
+              await pose.send({ image: video });
+            } catch (_) { /* ignore */ }
             processing = false;
           }
           rafRef.current = requestAnimationFrame(tick);
@@ -329,7 +301,7 @@ export default function SpeedGame() {
       cancelled = true;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       streamRef.current?.getTracks().forEach(t => t.stop());
-      handsRef.current?.close?.();
+      poseRef.current?.close?.();
     };
   }, [onResults]);
 
@@ -345,7 +317,6 @@ export default function SpeedGame() {
       if (n <= 0) {
         clearInterval(id);
         setCountdown(0);
-        // brief "GO!" then start
         setTimeout(() => {
           setReps(0);
           lastSign.current = 0;
@@ -377,7 +348,6 @@ export default function SpeedGame() {
     return () => clearInterval(id);
   }, [phase]);
 
-  // Save high score
   useEffect(() => {
     if (phase === "finished" && reps > highScore) {
       setHighScore(reps);
@@ -385,7 +355,6 @@ export default function SpeedGame() {
     }
   }, [phase, reps, highScore]);
 
-  // Beep on rep
   useEffect(() => {
     if (popKey === 0) return;
     try {
@@ -403,8 +372,8 @@ export default function SpeedGame() {
   }, [popKey]);
 
   const start = () => {
-    if (!bothHandsVisible) {
-      setStatus("Show both hands first!");
+    if (!bothArmsVisible) {
+      setStatus("Show your upper body first!");
       return;
     }
     setPhase("countdown");
@@ -415,7 +384,6 @@ export default function SpeedGame() {
 
   return (
     <div className="fixed inset-0 bg-background overflow-hidden text-foreground">
-      {/* Camera feed (mirrored) */}
       <video
         ref={videoRef}
         playsInline
@@ -427,16 +395,14 @@ export default function SpeedGame() {
         ref={canvasRef}
         className="absolute inset-0 w-full h-full object-cover pointer-events-none"
       />
-      {/* Vignette */}
       <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/60 via-transparent to-black/70" />
 
-      {/* Top bar */}
       <div className="absolute top-0 left-0 right-0 p-6 flex items-start justify-between z-10">
         <div>
           <h1 className="text-2xl font-black tracking-tight">
             <span className="text-[oklch(0.72_0.22_25)]">41</span> SPEED
           </h1>
-          <p className="text-xs text-white/60 mt-1">Hand crossing rep counter</p>
+          <p className="text-xs text-white/60 mt-1">Forearm crossing rep counter</p>
         </div>
         <div className="text-right">
           <div className="text-xs uppercase tracking-widest text-white/60">High</div>
@@ -444,15 +410,13 @@ export default function SpeedGame() {
         </div>
       </div>
 
-      {/* Status pill */}
       <div className="absolute top-24 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-4 py-2 rounded-full bg-black/50 backdrop-blur-md border border-white/10">
-        <span className={`w-2 h-2 rounded-full ${bothHandsVisible ? "bg-emerald-400" : "bg-amber-400"}`} />
+        <span className={`w-2 h-2 rounded-full ${bothArmsVisible ? "bg-emerald-400" : "bg-amber-400"}`} />
         <span className="text-sm font-medium">
-          {error ? error : phase === "idle" ? (bothHandsVisible ? "Ready" : status) : phase === "playing" ? "GO!" : phase === "finished" ? "Done!" : "Get ready…"}
+          {error ? error : phase === "idle" ? (bothArmsVisible ? "Ready" : status) : phase === "playing" ? "GO!" : phase === "finished" ? "Done!" : "Get ready…"}
         </span>
       </div>
 
-      {/* Center rep counter (during play) */}
       {(phase === "playing" || phase === "finished") && (
         <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
           <div
@@ -465,7 +429,6 @@ export default function SpeedGame() {
         </div>
       )}
 
-      {/* Countdown overlay */}
       {phase === "countdown" && (
         <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/40 backdrop-blur-sm">
           <div className="text-[16rem] font-black text-white animate-pulse">
@@ -474,7 +437,6 @@ export default function SpeedGame() {
         </div>
       )}
 
-      {/* Bottom: timer */}
       {(phase === "playing" || phase === "countdown") && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center">
           <div className="relative w-24 h-24">
@@ -496,7 +458,6 @@ export default function SpeedGame() {
         </div>
       )}
 
-      {/* Idle / Finished start screen */}
       {(phase === "idle" || phase === "finished") && (
         <div className="absolute inset-0 flex items-center justify-center z-20">
           <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-3xl p-10 text-center max-w-md mx-4 shadow-2xl">
@@ -513,7 +474,7 @@ export default function SpeedGame() {
               <>
                 <h2 className="text-3xl font-black mb-2">Ready to go?</h2>
                 <p className="text-sm text-white/70 mb-6">
-                  Hands in front of you, palms up. Swap them up & down as fast as you can for {GAME_DURATION} seconds.
+                  Stand back so your shoulders & arms are visible. Swap your arms up & down as fast as you can for {GAME_DURATION} seconds.
                 </p>
               </>
             )}
@@ -524,8 +485,8 @@ export default function SpeedGame() {
             >
               {phase === "finished" ? "PLAY AGAIN" : "START"}
             </button>
-            {!bothHandsVisible && !error && (
-              <p className="mt-4 text-xs text-amber-300">Show both hands to the camera</p>
+            {!bothArmsVisible && !error && (
+              <p className="mt-4 text-xs text-amber-300">Show your upper body to the camera</p>
             )}
           </div>
         </div>
