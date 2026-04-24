@@ -441,8 +441,13 @@ export default function SpeedGame() {
       )}
 
       {phase === "countdown" && (
-        <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/40 backdrop-blur-sm">
-          <div className="text-[16rem] font-black text-white animate-pulse">
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/50 backdrop-blur-sm">
+          <div className="text-sm uppercase tracking-widest text-white/70 mb-4">Get in position</div>
+          <div
+            key={countdown}
+            className="text-[16rem] leading-none font-black text-white countdown-flash"
+            style={{ textShadow: "0 0 80px oklch(0.72 0.22 25 / 0.8)" }}
+          >
             {countdown > 0 ? countdown : "GO!"}
           </div>
         </div>
