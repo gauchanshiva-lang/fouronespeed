@@ -7,8 +7,22 @@ import { useEffect, useRef, useState, useCallback } from "react";
 // and high-contrast vs the background. Much more reliable than
 // finger-level Hand tracking for high-speed rep counting.
 // ============================================================
-const MP_POSE_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js";
-const MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/pose/";
+const MP_VERSION = "0.5.1675469404";
+const MP_POSE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/pose@${MP_VERSION}/pose.js`;
+const MP_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/pose@${MP_VERSION}/`;
+
+function waitForGlobal(name: string, timeoutMs = 8000): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const check = () => {
+      const v = (window as any)[name];
+      if (typeof v === "function") return resolve(v);
+      if (Date.now() - start > timeoutMs) return reject(new Error(`${name} not available`));
+      setTimeout(check, 50);
+    };
+    check();
+  });
+}
 
 declare global {
   interface Window {
@@ -261,7 +275,7 @@ export default function SpeedGame() {
         video.srcObject = stream;
         await video.play();
 
-        const Pose = window.Pose;
+        const Pose = await waitForGlobal("Pose");
         const pose = new Pose({
           locateFile: (file: string) => MP_BASE + file,
         });
@@ -372,10 +386,7 @@ export default function SpeedGame() {
   }, [popKey]);
 
   const start = () => {
-    if (!bothArmsVisible) {
-      setStatus("Show your upper body first!");
-      return;
-    }
+    setStatus("Get in position!");
     setPhase("countdown");
   };
 
@@ -430,8 +441,13 @@ export default function SpeedGame() {
       )}
 
       {phase === "countdown" && (
-        <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/40 backdrop-blur-sm">
-          <div className="text-[16rem] font-black text-white animate-pulse">
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/50 backdrop-blur-sm">
+          <div className="text-sm uppercase tracking-widest text-white/70 mb-4">Get in position</div>
+          <div
+            key={countdown}
+            className="text-[16rem] leading-none font-black text-white countdown-flash"
+            style={{ textShadow: "0 0 80px oklch(0.72 0.22 25 / 0.8)" }}
+          >
             {countdown > 0 ? countdown : "GO!"}
           </div>
         </div>
