@@ -98,7 +98,7 @@ export default function SpeedGame() {
     rightExtreme.current.max = Math.max(rightExtreme.current.max, R.y);
 
     const diff = L.y - R.y;
-    const sign = diff > 0.015 ? 1 : diff < -0.015 ? -1 : 0;
+    const sign = diff > DEAD_ZONE ? 1 : diff < -DEAD_ZONE ? -1 : 0;
 
     if (sign === 0) return; // dead zone — hands roughly level
 
