@@ -29,14 +29,18 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "41speed" },
+      { name: "description", content: "Webcam game that counts fast alternating hand movements using real-time body tracking." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "41speed" },
+      { property: "og:description", content: "Webcam game that counts fast alternating hand movements using real-time body tracking." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "41speed" },
+      { name: "twitter:description", content: "Webcam game that counts fast alternating hand movements using real-time body tracking." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/42bcfe00-94f4-4b1d-80ba-9d3efae65a66/id-preview-f4f051e0--5e4e2682-b5d2-42c1-8e3b-27fd35589ac5.lovable.app-1776991715405.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/42bcfe00-94f4-4b1d-80ba-9d3efae65a66/id-preview-f4f051e0--5e4e2682-b5d2-42c1-8e3b-27fd35589ac5.lovable.app-1776991715405.png" },
     ],
     links: [
       {
