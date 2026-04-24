@@ -148,3 +148,15 @@
     color: var(--color-foreground);
   }
 }
+
+@keyframes rep-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); text-shadow: 0 0 40px var(--brand-glow); }
+  100% { transform: scale(1); }
+}
+.rep-pop { animation: rep-pop 0.28s cubic-bezier(.2,1.4,.4,1); }
+
+@keyframes hand-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.95; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
