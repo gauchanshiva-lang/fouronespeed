@@ -146,22 +146,51 @@ export default function SpeedGame() {
       };
     });
 
-    // Assign to spatial sides by x. The frame is mirrored visually,
-    // so smaller x = left side of frame for the user's view.
+    // Assignment: ALWAYS bind detected points to the two slots via
+    // nearest-neighbor against last known position. If only one hand is
+    // visible, ONLY that slot updates — the other slot is hidden, so we
+    // never draw a stale dot on top of the visible hand.
     let leftDetect: { x: number; y: number } | null = null;
     let rightDetect: { x: number; y: number } | null = null;
 
-    if (points.length === 1) {
-      // Assign to whichever side it's closer to
+    if (points.length >= 2) {
+      // Two hands: assign to minimize total distance from last known slots.
+      const [a, b] = points;
+      const lastL = leftHand.current;
+      const lastR = rightHand.current;
+      // If neither slot has ever been seen, fall back to spatial x order.
+      if (!lastL.visible && !lastR.visible) {
+        const sorted = [a, b].sort((p, q) => p.x - q.x);
+        leftDetect = sorted[0];
+        rightDetect = sorted[1];
+      } else {
+        const costAA_BB =
+          Math.hypot(a.x - lastL.x, a.y - lastL.y) +
+          Math.hypot(b.x - lastR.x, b.y - lastR.y);
+        const costAB_BA =
+          Math.hypot(a.x - lastR.x, a.y - lastR.y) +
+          Math.hypot(b.x - lastL.x, b.y - lastL.y);
+        if (costAA_BB <= costAB_BA) {
+          leftDetect = a; rightDetect = b;
+        } else {
+          leftDetect = b; rightDetect = a;
+        }
+      }
+    } else if (points.length === 1) {
       const p = points[0];
-      const distL = Math.hypot(p.x - leftHand.current.x, p.y - leftHand.current.y);
-      const distR = Math.hypot(p.x - rightHand.current.x, p.y - rightHand.current.y);
-      if (distL < distR) leftDetect = p; else rightDetect = p;
-    } else if (points.length >= 2) {
-      // Sort by x — leftmost is "left hand" spatially
-      const sorted = [...points].sort((a, b) => a.x - b.x);
-      leftDetect = sorted[0];
-      rightDetect = sorted[1];
+      const lastL = leftHand.current;
+      const lastR = rightHand.current;
+      // Pick whichever slot is closer AND was recently visible.
+      const distL = lastL.visible ? Math.hypot(p.x - lastL.x, p.y - lastL.y) : Infinity;
+      const distR = lastR.visible ? Math.hypot(p.x - lastR.x, p.y - lastR.y) : Infinity;
+      if (distL === Infinity && distR === Infinity) {
+        // Cold start with one hand — assign by frame side.
+        if (p.x < 0.5) leftDetect = p; else rightDetect = p;
+      } else if (distL <= distR) {
+        leftDetect = p;
+      } else {
+        rightDetect = p;
+      }
     }
 
     // EWMA smoothing — high alpha for responsiveness
@@ -174,7 +203,7 @@ export default function SpeedGame() {
         : leftDetect.y;
       leftHand.current.visible = true;
       leftHand.current.lastSeen = now;
-    } else if (now - leftHand.current.lastSeen > 350) {
+    } else if (now - leftHand.current.lastSeen > HAND_LOST_MS) {
       leftHand.current.visible = false;
     }
 
@@ -187,7 +216,7 @@ export default function SpeedGame() {
         : rightDetect.y;
       rightHand.current.visible = true;
       rightHand.current.lastSeen = now;
-    } else if (now - rightHand.current.lastSeen > 350) {
+    } else if (now - rightHand.current.lastSeen > HAND_LOST_MS) {
       rightHand.current.visible = false;
     }
 
