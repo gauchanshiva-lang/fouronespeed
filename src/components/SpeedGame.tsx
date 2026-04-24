@@ -7,8 +7,22 @@ import { useEffect, useRef, useState, useCallback } from "react";
 // and high-contrast vs the background. Much more reliable than
 // finger-level Hand tracking for high-speed rep counting.
 // ============================================================
-const MP_POSE_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js";
-const MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/pose/";
+const MP_VERSION = "0.5.1675469404";
+const MP_POSE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/pose@${MP_VERSION}/pose.js`;
+const MP_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/pose@${MP_VERSION}/`;
+
+function waitForGlobal(name: string, timeoutMs = 8000): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const check = () => {
+      const v = (window as any)[name];
+      if (typeof v === "function") return resolve(v);
+      if (Date.now() - start > timeoutMs) return reject(new Error(`${name} not available`));
+      setTimeout(check, 50);
+    };
+    check();
+  });
+}
 
 declare global {
   interface Window {
