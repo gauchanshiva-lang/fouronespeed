@@ -30,9 +30,11 @@ function loadScript(src: string): Promise<void> {
 type Phase = "idle" | "countdown" | "playing" | "finished";
 
 const GAME_DURATION = 20; // seconds
-const REP_COOLDOWN_MS = 130; // prevents double counting on a single crossing
-const MIN_MOVE_THRESHOLD = 0.025; // normalized units (~2.5% of frame height)
-const SMOOTHING = 0.55; // EWMA — higher = more responsive, lower = smoother
+const REP_COOLDOWN_MS = 70;     // ~allows up to ~14 reps/sec — pure jitter guard
+const MIN_MOVE_THRESHOLD = 0.012; // tiny movement still counts (was 0.025)
+const DEAD_ZONE = 0.004;          // hands considered "level" only when nearly identical (was 0.015)
+const SMOOTHING = 0.85;           // very responsive (was 0.55)
+const HAND_LOST_MS = 200;         // drop hand quickly when not seen
 
 interface HandPoint {
   x: number;
