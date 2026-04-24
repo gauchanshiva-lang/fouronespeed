@@ -48,10 +48,10 @@ function loadScript(src: string): Promise<void> {
 type Phase = "idle" | "countdown" | "playing" | "finished";
 
 const GAME_DURATION = 20;
-const REP_COOLDOWN_MS = 70;
-const MIN_MOVE_THRESHOLD = 0.012;
-const DEAD_ZONE = 0.004;
-const SMOOTHING = 0.8;
+const REP_COOLDOWN_MS = 50;
+const MIN_MOVE_THRESHOLD = 0.005;
+const DEAD_ZONE = 0.0015;
+const SMOOTHING = 0.88;
 const ARM_LOST_MS = 250;
 const VISIBILITY_THRESHOLD = 0.3; // pose landmark visibility cutoff
 
