@@ -296,8 +296,8 @@ export default function SpeedGame() {
         hands.setOptions({
           maxNumHands: 2,
           modelComplexity: 0, // fastest model — prioritize latency
-          minDetectionConfidence: 0.4,
-          minTrackingConfidence: 0.3,
+          minDetectionConfidence: 0.25,
+          minTrackingConfidence: 0.2,
         });
         hands.onResults(onResults);
         handsRef.current = hands;
