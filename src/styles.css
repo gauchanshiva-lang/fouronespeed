@@ -62,9 +62,15 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
+  --radius: 0.875rem;
+  --background: oklch(0.16 0.02 270);
+  --foreground: oklch(0.98 0.005 270);
+  --brand: oklch(0.72 0.22 25);
+  --brand-glow: oklch(0.78 0.24 30);
+  --accent-cyan: oklch(0.82 0.18 200);
+  --color-brand: var(--brand);
+  --color-brand-glow: var(--brand-glow);
+  --color-accent-cyan: var(--accent-cyan);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
