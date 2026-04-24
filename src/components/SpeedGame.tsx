@@ -386,10 +386,7 @@ export default function SpeedGame() {
   }, [popKey]);
 
   const start = () => {
-    if (!bothArmsVisible) {
-      setStatus("Show your upper body first!");
-      return;
-    }
+    setStatus("Get in position!");
     setPhase("countdown");
   };
 
