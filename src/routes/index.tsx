@@ -1,26 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import SpeedGame from "@/components/SpeedGame";
 
 export const Route = createFileRoute("/")({
   component: Index,
+  head: () => ({
+    meta: [
+      { title: "41 Speed — Hand Crossing Rep Counter" },
+      { name: "description", content: "Webcam game: count how many fast hand swaps you can do in 20 seconds. Real-time hand tracking, no install." },
+    ],
+  }),
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
-}
-
 function Index() {
-  return <PlaceholderIndex />;
+  // Avoid SSR'ing the camera component
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background text-foreground">
+        <div className="text-sm text-white/60">Loading…</div>
+      </div>
+    );
+  }
+  return <SpeedGame />;
 }
