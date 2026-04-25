@@ -394,70 +394,162 @@ export default function SpeedGame() {
   const timerColor = timeLeft <= 5 && phase === "playing" ? "stroke-[oklch(0.72_0.22_25)]" : "stroke-[oklch(0.82_0.18_200)]";
 
   return (
-    <div className="fixed inset-0 bg-background overflow-hidden text-foreground">
-      <video
-        ref={videoRef}
-        playsInline
-        muted
-        className="absolute inset-0 w-full h-full object-cover"
-        style={{ transform: "scaleX(-1)" }}
-      />
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-      />
-      <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/60 via-transparent to-black/70" />
+    <div className="fixed inset-0 overflow-hidden text-foreground flex flex-col items-center"
+      style={{
+        background:
+          "radial-gradient(ellipse at top, oklch(0.22 0.05 270) 0%, oklch(0.10 0.03 270) 60%, oklch(0.06 0.02 270) 100%)",
+      }}
+    >
+      {/* Ambient glow blobs */}
+      <div className="pointer-events-none absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full opacity-30 blur-3xl"
+        style={{ background: "var(--brand)" }} />
+      <div className="pointer-events-none absolute -bottom-40 -right-40 w-[600px] h-[600px] rounded-full opacity-20 blur-3xl"
+        style={{ background: "var(--accent-cyan)" }} />
 
-      <div className="absolute top-0 left-0 right-0 p-6 flex items-start justify-between z-10">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight">
-            <span className="text-[oklch(0.72_0.22_25)]">41</span> SPEED
-          </h1>
-          <p className="text-xs text-white/60 mt-1">Forearm crossing rep counter</p>
-        </div>
-        <div className="text-right">
-          <div className="text-xs uppercase tracking-widest text-white/60">High</div>
-          <div className="text-xl font-bold">{highScore}</div>
-        </div>
-      </div>
-
-      <div className="absolute top-24 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-4 py-2 rounded-full bg-black/50 backdrop-blur-md border border-white/10">
-        <span className={`w-2 h-2 rounded-full ${bothArmsVisible ? "bg-emerald-400" : "bg-amber-400"}`} />
-        <span className="text-sm font-medium">
-          {error ? error : phase === "idle" ? (bothArmsVisible ? "Ready" : status) : phase === "playing" ? "GO!" : phase === "finished" ? "Done!" : "Get ready…"}
-        </span>
-      </div>
-
-      {(phase === "playing" || phase === "finished") && (
-        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-          <div
-            key={popKey}
-            className="text-[14rem] leading-none font-black text-white drop-shadow-[0_0_40px_rgba(0,0,0,0.7)] rep-pop"
-            style={{ textShadow: "0 0 60px oklch(0.72 0.22 25 / 0.5)" }}
-          >
-            {reps}
+      {/* Top bar */}
+      <header className="relative z-20 w-full max-w-5xl px-6 pt-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-white shadow-lg"
+            style={{ background: "linear-gradient(135deg, var(--brand), var(--brand-glow))" }}>
+            41
+          </div>
+          <div>
+            <h1 className="text-lg font-black tracking-tight leading-none">SPEED</h1>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 mt-1">Hand Swap Challenge</p>
           </div>
         </div>
-      )}
-
-      {phase === "countdown" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/50 backdrop-blur-sm">
-          <div className="text-sm uppercase tracking-widest text-white/70 mb-4">Get in position</div>
-          <div
-            key={countdown}
-            className="text-[16rem] leading-none font-black text-white countdown-flash"
-            style={{ textShadow: "0 0 80px oklch(0.72 0.22 25 / 0.8)" }}
-          >
-            {countdown > 0 ? countdown : "GO!"}
-          </div>
+        <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 backdrop-blur-md border border-white/10">
+          <span className="text-[10px] uppercase tracking-widest text-white/50">High</span>
+          <span className="text-base font-black tabular-nums" style={{ color: "var(--brand-glow)" }}>{highScore}</span>
         </div>
-      )}
+      </header>
 
+      {/* Centered camera stage */}
+      <main className="relative z-10 flex-1 w-full flex items-center justify-center px-6 py-6">
+        <div className="relative w-full max-w-3xl aspect-video rounded-3xl overflow-hidden border border-white/10 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)]"
+          style={{
+            background: "oklch(0.10 0.02 270)",
+            boxShadow:
+              "0 30px 80px -20px rgba(0,0,0,0.8), 0 0 0 1px oklch(1 0 0 / 0.05), 0 0 60px -10px oklch(0.72 0.22 25 / 0.25)",
+          }}
+        >
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ transform: "scaleX(-1)" }}
+          />
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          />
+
+          {/* Vignette */}
+          <div className="absolute inset-0 pointer-events-none"
+            style={{ background: "radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.55) 100%)" }} />
+
+          {/* Status pill */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-4 py-2 rounded-full bg-black/60 backdrop-blur-md border border-white/10">
+            <span className={`w-2 h-2 rounded-full ${bothArmsVisible ? "bg-emerald-400 shadow-[0_0_10px_rgb(52,211,153)]" : "bg-amber-400 shadow-[0_0_10px_rgb(251,191,36)]"}`} />
+            <span className="text-xs font-medium tracking-wide">
+              {error ? error : phase === "idle" ? (bothArmsVisible ? "Ready" : status) : phase === "playing" ? "GO!" : phase === "finished" ? "Done!" : "Get ready…"}
+            </span>
+          </div>
+
+          {/* Live rep counter */}
+          {(phase === "playing" || phase === "finished") && (
+            <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+              <div
+                key={popKey}
+                className="font-black text-white rep-pop tabular-nums leading-none"
+                style={{
+                  fontSize: "clamp(6rem, 22vw, 16rem)",
+                  textShadow: "0 0 60px oklch(0.72 0.22 25 / 0.7), 0 4px 24px rgba(0,0,0,0.8)",
+                }}
+              >
+                {reps}
+              </div>
+            </div>
+          )}
+
+          {/* Countdown overlay */}
+          {phase === "countdown" && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/60 backdrop-blur-md">
+              <div className="text-xs uppercase tracking-[0.4em] text-white/70 mb-6">Get in position</div>
+              <div
+                key={countdown}
+                className="font-black text-white countdown-flash leading-none"
+                style={{
+                  fontSize: "clamp(8rem, 26vw, 18rem)",
+                  textShadow: "0 0 100px oklch(0.72 0.22 25 / 0.9)",
+                }}
+              >
+                {countdown > 0 ? countdown : "GO!"}
+              </div>
+            </div>
+          )}
+
+          {/* Idle / Finished modal */}
+          {(phase === "idle" || phase === "finished") && (
+            <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/55 backdrop-blur-md p-4">
+              <div className="w-full max-w-sm rounded-3xl p-8 text-center border border-white/10"
+                style={{
+                  background: "linear-gradient(160deg, oklch(0.18 0.03 270 / 0.95), oklch(0.10 0.02 270 / 0.95))",
+                  boxShadow: "0 20px 60px -10px rgba(0,0,0,0.6), inset 0 1px 0 oklch(1 0 0 / 0.06)",
+                }}
+              >
+                {phase === "finished" ? (
+                  <>
+                    <div className="text-[10px] uppercase tracking-[0.3em] text-white/50 mb-3">Final Score</div>
+                    <div className="text-7xl font-black mb-1 tabular-nums"
+                      style={{
+                        background: "linear-gradient(135deg, var(--brand), var(--brand-glow))",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                      }}>
+                      {reps}
+                    </div>
+                    <div className="text-xs text-white/50 mb-5">reps in {GAME_DURATION}s</div>
+                    {reps >= highScore && reps > 0 && (
+                      <div className="text-xs text-amber-300 mb-4 font-medium">🏆 New high score!</div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="text-[10px] uppercase tracking-[0.3em] text-white/50 mb-3">Challenge</div>
+                    <h2 className="text-3xl font-black mb-3 leading-tight">Ready to go?</h2>
+                    <p className="text-sm text-white/60 mb-6 leading-relaxed">
+                      Stand back so your shoulders &amp; arms are visible. Swap your arms up &amp; down as fast as you can for <span className="text-white font-semibold">{GAME_DURATION}s</span>.
+                    </p>
+                  </>
+                )}
+                <button
+                  onClick={start}
+                  disabled={!!error}
+                  className="w-full py-4 rounded-2xl text-white font-black text-base tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:hover:scale-100"
+                  style={{
+                    background: "linear-gradient(135deg, var(--brand), var(--brand-glow))",
+                    boxShadow: "0 10px 40px -10px oklch(0.72 0.22 25 / 0.8), inset 0 1px 0 oklch(1 0 0 / 0.2)",
+                  }}
+                >
+                  {phase === "finished" ? "PLAY AGAIN" : "START"}
+                </button>
+                {!bothArmsVisible && !error && (
+                  <p className="mt-4 text-xs text-amber-300/80">Show your upper body to the camera</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Bottom timer */}
       {(phase === "playing" || phase === "countdown") && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center">
+        <div className="relative z-10 pb-8 flex flex-col items-center">
           <div className="relative w-24 h-24">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="44" className="stroke-white/15 fill-none" strokeWidth="6" />
+              <circle cx="50" cy="50" r="44" className="stroke-white/10 fill-none" strokeWidth="6" />
               <circle
                 cx="50" cy="50" r="44"
                 className={`fill-none transition-[stroke-dashoffset] duration-100 ${timerColor}`}
@@ -465,47 +557,22 @@ export default function SpeedGame() {
                 strokeLinecap="round"
                 strokeDasharray={2 * Math.PI * 44}
                 strokeDashoffset={2 * Math.PI * 44 * (1 - timerProgress)}
+                style={{ filter: "drop-shadow(0 0 8px currentColor)" }}
               />
             </svg>
-            <div className="absolute inset-0 flex items-center justify-center text-2xl font-bold">
+            <div className="absolute inset-0 flex items-center justify-center text-2xl font-black tabular-nums">
               {Math.ceil(timeLeft)}
             </div>
           </div>
+          <div className="text-[10px] uppercase tracking-[0.3em] text-white/40 mt-2">Seconds left</div>
         </div>
       )}
 
-      {(phase === "idle" || phase === "finished") && (
-        <div className="absolute inset-0 flex items-center justify-center z-20">
-          <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-3xl p-10 text-center max-w-md mx-4 shadow-2xl">
-            {phase === "finished" ? (
-              <>
-                <div className="text-sm uppercase tracking-widest text-white/60 mb-2">Final Score</div>
-                <div className="text-7xl font-black mb-1 text-[oklch(0.72_0.22_25)]">{reps}</div>
-                <div className="text-sm text-white/60 mb-6">reps in {GAME_DURATION}s</div>
-                {reps >= highScore && reps > 0 && (
-                  <div className="text-xs text-amber-300 mb-4">🏆 New high score!</div>
-                )}
-              </>
-            ) : (
-              <>
-                <h2 className="text-3xl font-black mb-2">Ready to go?</h2>
-                <p className="text-sm text-white/70 mb-6">
-                  Stand back so your shoulders & arms are visible. Swap your arms up & down as fast as you can for {GAME_DURATION} seconds.
-                </p>
-              </>
-            )}
-            <button
-              onClick={start}
-              disabled={!!error}
-              className="w-full py-4 rounded-2xl bg-[oklch(0.72_0.22_25)] hover:bg-[oklch(0.78_0.24_30)] transition-all text-white font-bold text-lg shadow-[0_10px_40px_-10px_oklch(0.72_0.22_25_/_0.8)] disabled:opacity-40"
-            >
-              {phase === "finished" ? "PLAY AGAIN" : "START"}
-            </button>
-            {!bothArmsVisible && !error && (
-              <p className="mt-4 text-xs text-amber-300">Show your upper body to the camera</p>
-            )}
-          </div>
-        </div>
+      {/* Footer hint when idle */}
+      {phase === "idle" && (
+        <footer className="relative z-10 pb-6 text-[10px] uppercase tracking-[0.3em] text-white/30">
+          Powered by real-time pose tracking
+        </footer>
       )}
     </div>
   );
