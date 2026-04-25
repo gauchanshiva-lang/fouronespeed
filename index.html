@@ -1,30 +1,12 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>41speed</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
+  <head>
+    <title>41speed</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
 
-<body style="margin:0; font-family: Arial; text-align:center; background:#0f172a; color:white;">
-  <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
-
-  <h1 style="margin-top:40px;">41speed</h1>
-  <p>Game is live 🚀</p>
-
-  <video id="video" autoplay playsinline style="width:300px; margin-top:20px;"></video>
-
-  <script>
-    const video = document.getElementById("video");
-
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
-        video.srcObject = stream;
-      })
-      .catch(err => {
-        alert("Camera blocked: " + err);
-      });
-  </script>
-
-</body>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
